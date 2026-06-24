@@ -1,7 +1,7 @@
 ---
 name: baoyu-comic
-description: Knowledge comic creator supporting multiple art styles and tones. Creates original educational comics with detailed panel layouts and sequential image generation. Use when user asks to create "知识漫画", "教育漫画", "biography comic", "tutorial comic", or "Logicomix-style comic".
-version: 1.56.1
+description: Knowledge comic creator supporting multiple art styles and tones. Creates original educational comics with detailed panel layouts and batch-capable image generation. Use when user asks to create "知识漫画", "教育漫画", "biography comic", "tutorial comic", or "Logicomix-style comic".
+version: 1.117.4
 metadata:
   openclaw:
     homepage: https://github.com/JimLiu/baoyu-skills#baoyu-comic
@@ -32,19 +32,40 @@ When this skill needs to render an image, resolve the backend in this order:
 1. **Current-request override** — if the user names a specific backend in the current message, use it.
 2. **Saved preference** — if `EXTEND.md` sets `preferred_image_backend` to a backend available right now, use it.
 3. **Auto-select** (when the preference is `auto`, unset, or the pinned backend isn't available):
-   - **Codex (`imagegen`)** — first, inspect your available-skills / tool inventory. If a skill named `imagegen` is listed, you are running inside Codex and MUST use it: invoke via the `Skill` tool with `skill: "imagegen"`, passing the saved prompt file's content (plus output path and aspect ratio per Codex `imagegen`'s own args). Codex `imagegen` is the official raster backend in that runtime and outranks any non-native skill (e.g., `baoyu-imagine`) unless the user has explicitly pinned a different `preferred_image_backend`.
+   - **Codex (`imagegen`)** — first, inspect your available-skills / tool inventory. If a skill named `imagegen` is listed, you are running inside Codex and MUST use it: invoke via the `Skill` tool with `skill: "imagegen"`, passing the saved prompt file's content (plus output path and aspect ratio per Codex `imagegen`'s own args). Codex `imagegen` is the official raster backend in that runtime and outranks any non-native skill (e.g., `baoyu-image-gen`) unless the user has explicitly pinned a different `preferred_image_backend`.
+   - **Codex via `codex exec` (`codex-imagegen`)** — if the current runtime exposes no native `imagegen` skill but the `codex` CLI is on `PATH` with an active `codex login`, route through `baoyu-image-gen --provider codex-cli` (preferred), or — if baoyu-image-gen is unavailable — invoke the bundled wrapper directly. Details, parameters, and the runtime-discovery procedure live in [references/codex-imagegen.md](references/codex-imagegen.md) — load that file only when this branch is selected.
+   - **Cursor (`GenerateImage`)** — if the runtime exposes a native `GenerateImage` tool, you are running inside Cursor and it outranks any non-native skill the same way Codex `imagegen` does. Two hard caveats: (a) it has no aspect-ratio parameter — state the target aspect ratio / dimensions explicitly in the prompt text passed as `description`; (b) it does not accept an output directory — it saves to a tool-managed location, so after generation copy/move the file to the skill's expected output path (e.g., `outputs/.../NN-xxx.png`). Reference images go in `reference_image_paths`.
    - **Other runtime-native tools** — if the runtime exposes a different native image tool (e.g., Hermes `image_generate`), use it the same way.
-   - Otherwise, if exactly one non-native backend is installed (e.g., `baoyu-imagine`), use it.
+   - Otherwise, if exactly one non-native backend is installed (e.g., `baoyu-image-gen`), use it.
    - Otherwise (multiple non-native backends with no runtime-native tool), ask the user once — batch with any other initial questions.
 4. **If none are available**, tell the user and ask how to proceed.
 
 **⛔ Never substitute SVG, HTML, canvas, or other code-based rendering for raster image generation.** Codex `imagegen`'s own description says it should be used "when the output should be a bitmap asset rather than repo-native code or vector." If you cannot resolve a raster backend via step 3, fall through to step 4 and ask the user — do **not** silently emit SVG, write inline `<svg>` markup, or produce HTML/CSS art as a substitute. This applies even if the article/section seems "diagram-like": the consumer skill calling this rule has already decided that a raster image is what it needs.
 
+**⛔ Never repair rendered text by painting over a generated bitmap.** Do not use ImageMagick, Pillow, Canvas, SVG, HTML/CSS, OCR scripts, or any other programmatic overlay to cover, rewrite, erase, stroke, or replace dialogue, sound effects, panel labels, or any other text inside an already generated comic page. If text is wrong or unclear, regenerate from a corrected prompt, redraw the page with less or no on-image text, or ask the user which imperfect candidate to keep.
+
 Setting `preferred_image_backend: ask` forces the step-3 prompt every run regardless of available backends. Users change the pinned backend via the `## Changing Preferences` section below.
 
 **Prompt file requirement (hard)**: write each image's full, final prompt to a standalone file under `prompts/` (naming: `NN-{type}-[slug].md`) BEFORE invoking any backend. The backend receives the prompt file (or its content); the file is the reproducibility record and lets you switch backends without regenerating prompts.
 
-Concrete tool names (`imagegen`, `image_generate`, `baoyu-imagine`) above are examples — substitute the local equivalents under the same rule.
+Concrete tool names (`imagegen`, `GenerateImage`, `image_generate`, `baoyu-image-gen`) above are examples — substitute the local equivalents under the same rule.
+
+## Batch Generation Policy
+
+After every prompt file for the current generation group has been saved and verified, generate images in batches by default.
+
+Priority order:
+
+1. Use the chosen backend's native batch / multi-task interface if it exists. Each task must keep its own prompt file, output path, aspect ratio, session ID, and direct reference images.
+2. If no native batch interface exists but the runtime can issue parallel tool calls, dispatch up to `generation_batch_size` images at a time. Default: `4`. An explicit user request in the current message, such as `--batch-size 4` or "并行4张一起生成", overrides EXTEND.md.
+3. If neither native batch nor parallel tool calls are available, generate sequentially.
+
+Rules:
+
+- Honor workflow dependencies first: generate `characters/characters.png` before pages that use it as a reference.
+- Never start the first page batch until all selected page prompt files exist on disk.
+- Retry failed items once without regenerating successful items.
+- Do not use subagents merely to parallelize image rendering. Use subagents only for separate prompt iteration or creative exploration.
 
 ## Reference Images
 
@@ -90,6 +111,7 @@ references:
 | `--aspect` | 3:4 (default, portrait), 4:3 (landscape), 16:9 (widescreen) | Page aspect ratio |
 | `--lang` | auto (default), zh, en, ja, etc. | Output language |
 | `--ref <files...>` | File paths | Reference images applied to every page for style / palette / scene guidance. See [Reference Images](#reference-images) above. |
+| `--batch-size <n>` | 1-8 | Temporary page generation batch size for this run. Default: `generation_batch_size` from EXTEND.md, otherwise 4. |
 
 ### Partial Workflow Options
 
@@ -225,7 +247,9 @@ Analyze → [Check Existing?] → [Confirm: Style + Reviews] → Storyboard → 
 
 ### Step 7: Image Generation
 
-**Pick a backend once per session** using the `## Image Generation Tools` rule at the top. If the backend is a repo skill (e.g., `baoyu-imagine`), read its `SKILL.md` and use its documented interface rather than its scripts.
+**Pick a backend once per session** using the `## Image Generation Tools` rule at the top. If the backend is a repo skill (e.g., `baoyu-image-gen`), read its `SKILL.md` and use its documented interface rather than its scripts.
+
+**`codex-imagegen` invocation**: when the rule resolves to `codex-imagegen`, see [references/codex-imagegen.md](references/codex-imagegen.md) for the invocation contract (preferred `baoyu-image-gen --provider codex-cli` path, runtime wrapper discovery, parameter notes, stdout schema, batch semantics — n=1 per call so page batches must dispatch one wrapper call per page).
 
 **7.1 Character sheet** — generate it (to `characters/characters.png`, aspect `4:3`) when the comic is multi-page with recurring characters. Skip for simple presets (e.g., four-panel minimalist) or single-page comics. Compress to JPEG before use-as-`--ref` (`sips -s format jpeg -s formatOptions 80 …` on macOS, `pngquant --quality=65-80 …` elsewhere) to avoid payload failures. The prompt file at `characters/characters.md` must exist before invoking the backend.
 
@@ -236,6 +260,8 @@ Analyze → [Check Existing?] → [Confirm: Style + Reviews] → Storyboard → 
 | Exists | Supported | Pass sheet as `--ref` on every page |
 | Exists | Not supported | Prepend character descriptions to every prompt file |
 | Skipped | — | All descriptions inline in prompt |
+
+**Execution strategy**: Generate the character sheet first when needed. Then build the selected page task list from saved prompt files and dispatch pages in batches per the `## Batch Generation Policy`: backend native batch first, runtime parallel tool calls second, sequential only as fallback. `--regenerate N` and `--images-only` apply the same batching rules to the selected existing prompts.
 
 **Backup rule**: existing `prompts/…md` and `…png` files → rename with `-backup-YYYYMMDD-HHMMSS` suffix before regenerating. Aspect ratio from storyboard (default `3:4`; preset may override).
 
@@ -257,7 +283,7 @@ If EXTEND.md is not found, first-time setup is **blocking** — complete it befo
 | Found | Read, parse, display summary → continue |
 | Not found | ⛔ Run first-time setup ([references/config/first-time-setup.md](references/config/first-time-setup.md)) → save EXTEND.md → continue |
 
-**EXTEND.md supports**: watermark, preferred art/tone/layout, custom style definitions, character presets, language preference. Schema: [references/config/preferences-schema.md](references/config/preferences-schema.md).
+**EXTEND.md supports**: watermark, preferred art/tone/layout, custom style definitions, character presets, language preference, preferred image backend, generation batch size. Schema: [references/config/preferences-schema.md](references/config/preferences-schema.md).
 
 ## References
 
@@ -293,6 +319,12 @@ If EXTEND.md is not found, first-time setup is **blocking** — complete it befo
 
 **IMPORTANT**: When updating pages, ALWAYS update the prompt file (`prompts/NN-{cover|page}-[slug].md`) FIRST before regenerating. This ensures changes are documented and reproducible.
 
+Text correction policy:
+
+- If dialogue, sound effects, panel labels, or any other rendered text is misspelled, garbled, hard to read, or visually weak, do not patch the bitmap with code.
+- For text-correction regenerations, write a new prompt file and a new output path so the flawed candidate is preserved for comparison.
+- Post-processing is limited to crop, resize, compression, or format conversion that does not alter text or the main composition.
+
 ## Notes
 
 - Image generation: 10-30 seconds per page
@@ -314,6 +346,7 @@ EXTEND.md lives at `.baoyu-skills/baoyu-comic/EXTEND.md` (project) or `~/.baoyu-
 - **Common one-line edits**:
   - `preferred_image_backend: auto` — default; runtime-native tool wins, falls back to the only installed backend, asks only if multiple non-native are present.
   - `preferred_image_backend: codex-imagegen` — pin to Codex's built-in.
-  - `preferred_image_backend: baoyu-imagine` — pin to the baoyu-imagine skill.
+  - `preferred_image_backend: baoyu-image-gen` — pin to the baoyu-image-gen skill.
   - `preferred_image_backend: ask` — confirm backend every run.
+  - `generation_batch_size: 4` — default number of page images to render concurrently when the backend/runtime supports batch or parallel generation.
   - `watermark.enabled: true`, `preferred_art`, `preferred_tone`, `preferred_layout`, `language` — shift the auto-selection defaults and cosmetic choices.

@@ -25,19 +25,22 @@ ${BUN_X} {baseDir}/scripts/main.ts --prompt "Make blue" --image out.png --ref so
 
 ```bash
 # OpenAI
-${BUN_X} {baseDir}/scripts/main.ts --prompt "A cat" --image out.png --provider openai
+${BUN_X} {baseDir}/scripts/main.ts --prompt "A cat" --image out.png --provider openai --model gpt-image-2
 
 # Azure OpenAI (model = deployment name)
-${BUN_X} {baseDir}/scripts/main.ts --prompt "A cat" --image out.png --provider azure --model gpt-image-1.5
+${BUN_X} {baseDir}/scripts/main.ts --prompt "A cat" --image out.png --provider azure --model gpt-image-2
+
+# OpenAI GPT Image 2 custom 4K size
+${BUN_X} {baseDir}/scripts/main.ts --prompt "A cinematic landscape" --image out.png --provider openai --model gpt-image-2 --size 3840x2160
 
 # Google with explicit model
-${BUN_X} {baseDir}/scripts/main.ts --prompt "Make blue" --image out.png --provider google --model gemini-3-pro-image-preview --ref source.png
+${BUN_X} {baseDir}/scripts/main.ts --prompt "Make blue" --image out.png --provider google --model gemini-3-pro-image --ref source.png
 
 # OpenRouter (recommended default)
 ${BUN_X} {baseDir}/scripts/main.ts --prompt "A cat" --image out.png --provider openrouter
 
 # OpenRouter with reference
-${BUN_X} {baseDir}/scripts/main.ts --prompt "Make blue" --image out.png --provider openrouter --model google/gemini-3.1-flash-image-preview --ref source.png
+${BUN_X} {baseDir}/scripts/main.ts --prompt "Make blue" --image out.png --provider openrouter --model google/gemini-3.1-flash-image --ref source.png
 
 # DashScope (default model)
 ${BUN_X} {baseDir}/scripts/main.ts --prompt "一只可爱的猫" --image out.png --provider dashscope
@@ -47,6 +50,12 @@ ${BUN_X} {baseDir}/scripts/main.ts --prompt "为咖啡品牌设计一张 21:9 �
 
 # DashScope legacy fixed-size
 ${BUN_X} {baseDir}/scripts/main.ts --prompt "一张电影感海报" --image out.png --provider dashscope --model qwen-image-max --size 1664x928
+
+# DashScope Wan 2.7 Image Pro (4K text-to-image)
+${BUN_X} {baseDir}/scripts/main.ts --prompt "一间有着精致窗户的花店" --image out.png --provider dashscope --model wan2.7-image-pro --size 4096x4096
+
+# DashScope Wan 2.7 Image with reference image (multi-image fusion)
+${BUN_X} {baseDir}/scripts/main.ts --prompt "把图2的涂鸦喷绘在图1的汽车上" --image out.png --provider dashscope --model wan2.7-image-pro --ref car.webp paint.webp
 
 # Z.AI GLM-image
 ${BUN_X} {baseDir}/scripts/main.ts --prompt "一张带清晰中文标题的科技海报" --image out.png --provider zai
@@ -68,7 +77,27 @@ ${BUN_X} {baseDir}/scripts/main.ts --prompt "A cinematic portrait" --image out.p
 
 # Replicate Wan 2.7 Image Pro
 ${BUN_X} {baseDir}/scripts/main.ts --prompt "A concept frame" --image out.png --provider replicate --model wan-video/wan-2.7-image-pro --size 2048x1152
+
+# Codex CLI (uses Codex / ChatGPT subscription — no OPENAI_API_KEY; requires `codex` on PATH and `codex login`)
+${BUN_X} {baseDir}/scripts/main.ts --prompt "A cinematic portrait" --image out.png --provider codex-cli --ar 16:9
+
+# Codex CLI with reference images (style/composition guidance)
+${BUN_X} {baseDir}/scripts/main.ts --prompt "Match this color palette" --image out.png --provider codex-cli --ref source.png --ar 1:1
+
+# Agnes (default model)
+${BUN_X} {baseDir}/scripts/main.ts --prompt "A detailed infographic" --image out.png --provider agnes
+
+# Agnes with aspect ratio and URL output
+${BUN_X} {baseDir}/scripts/main.ts --prompt "A cinematic scene" --image out.txt --provider agnes --ar 16:9 --response-format url
+
+# Agnes with reference image
+${BUN_X} {baseDir}/scripts/main.ts --prompt "Apply this style" --image out.png --provider agnes --ref source.png
 ```
+
+Notes on `codex-cli`:
+- Never auto-selected — pin via `--provider codex-cli` or `default_provider: codex-cli` in EXTEND.md.
+- Only `n=1` supported (Codex `image_gen` returns one image per call); `--size`, `--imageSize`, `--quality`, and `--imageApiDialect` are ignored or rejected.
+- Typically 5–10× slower than direct OpenAI / Google API calls (except on cache hits). Tune via `BAOYU_CODEX_IMAGEGEN_TIMEOUT_MS`, `BAOYU_CODEX_IMAGEGEN_RETRIES`, and `BAOYU_CODEX_IMAGEGEN_CACHE_DIR`.
 
 ## Batch Mode
 
