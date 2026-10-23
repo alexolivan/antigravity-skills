@@ -1,14 +1,11 @@
 # Antigravity Skills
 
-[简体中文](README.zh-CN.md) | [English](README.md)
-
 Empower agents with professional capabilities in specific fields (such as full-stack development, complex logic planning, multimedia processing, etc.) through modular **Skills** definitions, allowing agents to solve complex problems systematically like human experts.
 
 ## 📂 Directory Structure
 
 ```
 .
-├── .claude-plugin/     # Claude plugin configuration files
 ├── skills/             # Antigravity Skills library
 │   ├── skill-name/     # Individual skill directory
 │   │   ├── SKILL.md    # Core skill definition and Prompt (Required)
@@ -16,9 +13,6 @@ Empower agents with professional capabilities in specific fields (such as full-s
 │   │   ├── examples/   # Skill usage examples (Optional)
 │   │   └── resources/  # Templates and resources relied upon by the skill (Optional)
 ├── docs/               # User manual and documentation guides
-├── scripts/            # Maintenance scripts
-├── skills_sources.json # Skills synchronization source config
-├── skills_index.json   # Skills metadata index
 ├── spec/               # Specification documents
 ├── template/           # New skill template
 └── README.md
